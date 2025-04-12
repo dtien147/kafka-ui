@@ -24,7 +24,6 @@
     "build:ts": "swc main.ts -d dist",
     "build:fe": "yarn workspace frontend build && yarn copy:fe",
     "build": "yarn build:ts && yarn build:fe && electron-builder --win",
-    "postinstall": "electron-builder install-app-deps",
     "format": "prettier --write ."
   },
   "devDependencies": {
@@ -35,7 +34,7 @@
     "cpx2": "^8.0.0",
     "css-loader": "^7.1.2",
     "electron": "^35.1.5",
-    "electron-builder": "^26.0.12",
+    "electron-packager": "^17.1.2",
     "esbuild": "^0.25.2",
     "eslint": "^8.56.0",
     "eslint-config-prettier": "^9.1.0",
@@ -53,29 +52,5 @@
   },
   "dependencies": {
     "avsc": "^5.7.7"
-  },
-  "build": {
-    "asar": false,
-    "appId": "com.kafka.ui",
-    "productName": "Kafka UI",
-    "win": {
-      "target": "dir"
-    },
-    "mac": {
-      "target": "dmg",
-      "category": "public.app-category.developer-tools"
-    },
-    "directories": {
-      "buildResources": "assets",
-      "output": "dist"
-    },
-    "files": [
-      "dist/main.js",
-      "dist/app/**/*",
-      "package.json"
-    ],
-    "extraMetadata": {
-      "main": "dist/main.js"
-    }
   }
 }

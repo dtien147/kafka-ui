@@ -13,8 +13,7 @@
   "scripts": {
     "start": "webpack serve --config webpack.config.js",
     "build": "webpack --config webpack.config.js",
-    "lint": "eslint .",
-    "preview": "vite preview"
+    "lint": "eslint ."
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.3",
