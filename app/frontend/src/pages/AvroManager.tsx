@@ -2,97 +2,184 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { API_HOST } from '../constants';
 
-export default function AvroManager() {
-  const [files, setFiles] = useState<Record<string, 'key' | 'value'>>({});
-  const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState('');
-  const [schemaType, setSchemaType] = useState<'key' | 'value'>('key');
-  const [search, setSearch] = useState('');
+type SchemaType = 'key' | 'value';
 
-  const fetchFiles = async () => {
+interface PendingFile {
+  file: File;
+  name: string;
+  type: SchemaType | '';
+  error?: string;
+}
+
+export default function AvroManager() {
+  const [files, setFiles] = useState<Record<string, SchemaType>>({});
+  const [pending, setPending] = useState<PendingFile[]>([]);
+  const [suffixHint, setSuffixHint] = useState<string>('key.avsc');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    fetchList();
+  }, []);
+
+  const fetchList = async () => {
     const res = await axios.get(`${API_HOST}/avro/files`);
     setFiles(res.data);
   };
 
-  useEffect(() => { fetchFiles(); }, []);
-
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('type', schemaType);
-
-    setUploading(true);
-    setError('');
-
-    try {
-      await axios.post(`${API_HOST}/avro/upload`, formData);
-      fetchFiles();
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Upload failed');
-    } finally {
-      setUploading(false);
-    }
+  const detectTypeFromHint = (fileName: string): SchemaType | '' => {
+    if (fileName.toLowerCase().endsWith(suffixHint)) return 'key';
+    return 'value';
   };
 
-  const handleDelete = async (file: string) => {
-    try {
-      await axios.delete(`http://localhost:5000/avro/${file}`);
-      fetchFiles();
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Delete failed');
-    }
+  const handleFileInput = (fileList: FileList | null) => {
+    if (!fileList) return;
+
+    const newFiles: PendingFile[] = Array.from(fileList).map((file) => ({
+      file,
+      name: file.name,
+      type: detectTypeFromHint(file.name),
+    }));
+
+    setPending((prev) => [...prev, ...newFiles]);
   };
 
-  const sortedEntries = Object.entries(files)
-    .filter(([filename]) => filename.toLowerCase().includes(search.toLowerCase()))
-    .sort(([aName], [bName]) => aName.localeCompare(bName));
+  const uploadAll = async () => {
+    const uploads = pending.map(async (item) => {
+      if (!item.type) {
+        item.error = 'Missing or invalid type';
+        return item;
+      }
+
+      const form = new FormData();
+      form.append('file', item.file); // Keep original name
+      form.append('type', item.type);
+
+      try {
+        await axios.post(`${API_HOST}/avro/upload`, form);
+        return null;
+      } catch (err: any) {
+        item.error = err.response?.data?.error || err.message;
+        return item;
+      }
+    });
+
+    const results = await Promise.all(uploads);
+    const failed = results.filter(Boolean) as PendingFile[];
+    setPending(failed);
+    await fetchList();
+    setError(failed.length > 0 ? 'Some uploads failed' : '');
+  };
+
+  const removePending = (index: number) => {
+    setPending((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const removeUploaded = async (file: string) => {
+    await axios.delete(`${API_HOST}/avro/${file}`);
+    await fetchList();
+  };
 
   return (
-    <div className="container mx-auto p-4 max-w-3xl space-y-4">
-      <h2 className="text-2xl font-bold">Manage Avro Schemas</h2>
+    <div className="p-4 max-w-4xl mx-auto">
+      <h2 className="text-2xl font-bold mb-4">Manage Avro Files</h2>
 
-      <div className="flex items-center gap-4">
-        <select
-          value={schemaType}
-          onChange={(e) => setSchemaType(e.target.value as 'key' | 'value')}
-          className="border rounded px-2 py-1"
-        >
-          <option value="key">🔑 Key Schema</option>
-          <option value="value">📦 Value Schema</option>
-        </select>
+      <div className="flex flex-col sm:flex-row sm:items-end gap-4 mb-4">
+        <div className="flex flex-col">
+          <label className="text-sm font-medium">Suffix for key schema file</label>
+          <input
+            className="border rounded px-2 py-1 w-40"
+            value={suffixHint}
+            onChange={(e) => setSuffixHint(e.target.value)}
+            placeholder=".key.avsc"
+            disabled
+            readOnly
+          />
+        </div>
 
-        <input type="file" accept=".avsc" onChange={handleUpload} />
+        <div className="flex flex-col">
+          <label className="text-sm font-medium">Select files</label>
+          <input
+            type="file"
+            accept=".avsc"
+            multiple
+            onChange={(e) => handleFileInput(e.target.files)}
+          />
+        </div>
+
+        {pending.length > 0 && (
+          <button
+            onClick={uploadAll}
+            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+          >
+            Upload All
+          </button>
+        )}
       </div>
 
-      {uploading && <p>Uploading...</p>}
-      {error && <p className="text-red-600">{error}</p>}
+      {error && <p className="text-red-500 text-sm mb-2">{error}</p>}
 
-      <input
-        type="text"
-        placeholder="🔍 Search schemas..."
-        className="w-full border p-2 rounded"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-      />
+      {pending.length > 0 && (
+        <div className="mb-6">
+          <h3 className="font-semibold mb-2">Pending Uploads</h3>
+          <table className="w-full border text-left bg-white shadow rounded">
+            <thead>
+              <tr className="bg-gray-100">
+                <th className="p-2">Filename</th>
+                <th className="p-2">Detected Type</th>
+                <th className="p-2"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {pending.map((p, i) => (
+                <tr key={p.name + i} className="border-t">
+                  <td className="p-2">{p.name}</td>
+                  <td className="p-2 capitalize">
+                    {p.type || <span className="text-red-600">Unknown</span>}
+                    {p.error && (
+                      <div className="text-sm text-red-500">{p.error}</div>
+                    )}
+                  </td>
+                  <td className="p-2">
+                    <button
+                      onClick={() => removePending(i)}
+                      className="text-red-600 hover:underline"
+                    >
+                      Remove
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-      <ul className="bg-white shadow rounded p-4 space-y-2">
-        {sortedEntries.map(([file, type]) => (
-          <li key={file} className="flex justify-between items-center text-sm">
-            <span className="text-blue-800">
-              {file} <span className="text-gray-400">({type})</span>
-            </span>
-            <button
-              className="text-red-600 hover:underline text-xs"
-              onClick={() => handleDelete(file)}
-            >
-              Delete
-            </button>
-          </li>
-        ))}
-      </ul>
+      {/* Uploaded Files */}
+      <table className="w-full border text-left bg-white shadow rounded">
+        <thead>
+          <tr className="bg-gray-100">
+            <th className="p-2">File</th>
+            <th className="p-2">Type</th>
+            <th className="p-2"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {Object.entries(files).map(([name, type]) => (
+            <tr key={name} className="border-t">
+              <td className="p-2">{name}</td>
+              <td className="p-2 capitalize">{type}</td>
+              <td className="p-2">
+                <button
+                  onClick={() => removeUploaded(name)}
+                  className="text-red-600 hover:underline"
+                >
+                  Delete
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
