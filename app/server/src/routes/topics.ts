@@ -10,7 +10,12 @@ const router = express.Router();
 router.get('/', async (_, res) => {
   const topics = await admin.listTopics();
 
-  res.json(topics.filter((topic) => !IGNORE_TOPICS.includes(topic)));
+  const filteredTopics = topics.filter((topic) => !IGNORE_TOPICS.includes(topic))
+
+  res.json(filteredTopics.map(topic => ({
+    name: topic,
+    messageCount: getConsumerMessages(topic)?.length || 0
+  })));
 });
 
 router.get('/:topic/messages', async (req, res) => {
