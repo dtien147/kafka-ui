@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import Message from '../components/Message';
 import { API_HOST } from '../constants';
@@ -35,7 +35,7 @@ export default function TopicDetail({ topic }: { topic: string }) {
       );
     });
     setMessages(filtered);
-    setFromOffset(Math.max(fromOffset, parseInt(messages[0].offset)));
+    setFromOffset(Math.max(fromOffset, parseInt(messages[0]?.offset || 0)));
     setTotal(total);
   };
 

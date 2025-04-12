@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { API_HOST } from '../constants';
 
 export default function ConsumerGroups() {
