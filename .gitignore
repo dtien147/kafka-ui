@@ -2,8 +2,5 @@ node_modules
 .env*
 .DS_Store
 yarn-error.log
-.vscode
 tmp
 dist/
-.vscode
-!.vscode/launch.json
